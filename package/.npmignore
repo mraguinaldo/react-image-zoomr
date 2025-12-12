@@ -1,0 +1,6 @@
+src
+.vscode
+*.tsbuildinfo
+*.log
+node_modules
+__tests__
