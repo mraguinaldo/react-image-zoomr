@@ -6,7 +6,7 @@ function App() {
   return (
     <>
       <ImageZoomr
-        src="/test-image.png"
+        src="/test-image.jpg"
         alt="Foto"
         width={400}
         height={600}
@@ -14,7 +14,7 @@ function App() {
         borderRadius={12}
         zoomSize={200}
         loading="lazy"
-        zoomBoxStyle={{ border: 1, borderColor: "red", borderStyle: "solid" }}
+        zoomBoxStyle={{ border: 1, borderColor: "blue", borderStyle: "dashed" }}
       />
     </>
   );

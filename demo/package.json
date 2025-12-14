@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mraguinaldo/react-image-zoomr": "^1.0.5",
+    "@mraguinaldo/react-image-zoomr": "^1.0.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tsup": "^8.5.1"

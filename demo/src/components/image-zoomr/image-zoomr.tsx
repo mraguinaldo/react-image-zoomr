@@ -1,9 +1,13 @@
+"use client";
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useEffect } from "react";
+import { useReducer, useRef, useEffect } from "react";
 import "./image-zoomr.css";
 import type { IImageZoomer } from "./interface";
+import { initialState } from "./initial-state";
+import { zoomReducer } from "./zoomr-reducer";
 
-export function ImageZoomr({
+export const ImageZoomr = ({
   containerClass = "",
   imageClass = "",
   skeletonClass = "",
@@ -29,155 +33,154 @@ export function ImageZoomr({
 
   src,
   alt = "",
+  zoomBoxStyle,
   ...imgProps
-}: IImageZoomer) {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
+}: IImageZoomer) => {
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const [zoomVisible, setZoomVisible] = useState(false);
-  const [zoomLoaded, setZoomLoaded] = useState(false);
-  const [zoomPos, setZoomPos] = useState({ x: 0, y: 0 });
-  const [backgroundPos, setBackgroundPos] = useState({ x: 50, y: 50 });
-  const [currentZoom, setCurrentZoom] = useState(initialZoom);
-
-  const imgContainerRef = useRef<HTMLDivElement>(null);
+  const [state, dispatch] = useReducer(zoomReducer, initialState(initialZoom));
 
   useEffect(() => {
-    if (!enableZoom || !zoomVisible) return;
+    if (!containerRef.current) return;
 
-    const blockScroll = (e: WheelEvent) => e.preventDefault();
+    const el = containerRef.current;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        dispatch({ type: "SET_READY", payload: true });
+      }
+    });
 
-    document.addEventListener("wheel", blockScroll, { passive: false });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-    return () => {
-      document.removeEventListener("wheel", blockScroll);
+  useEffect(() => {
+    dispatch({ type: "RESET", payload: { initialZoom } });
+  }, [src, initialZoom]);
+
+  useEffect(() => {
+    if (!enableZoom || !state.zoomVisible || !containerRef.current) return;
+
+    const el = containerRef.current;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -zoomStep : zoomStep;
+
+      dispatch({
+        type: "SET_CURRENT_ZOOM",
+        payload: Math.max(
+          minZoom,
+          Math.min(maxZoom, state.currentZoom + delta)
+        ),
+      });
     };
-  }, [zoomVisible, enableZoom]);
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [
+    enableZoom,
+    state.zoomVisible,
+    state.currentZoom,
+    zoomStep,
+    minZoom,
+    maxZoom,
+  ]);
 
   useEffect(() => {
-    if (!zoomVisible || !enableZoom) return;
+    if (!enableZoom || !state.zoomVisible || !src) return;
+    let cancelled = false;
+    const img = new Image();
+    img.src = src;
+    img.onload = () => {
+      if (!cancelled) dispatch({ type: "SET_ZOOM_LOADED", payload: true });
+    };
+    return () => {
+      cancelled = true;
+    };
+  }, [enableZoom, state.zoomVisible, src]);
 
-    const img = new window.Image();
-    img.src = src ?? "";
-    img.onload = () => setZoomLoaded(true);
-  }, [zoomVisible, src, enableZoom]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!imgContainerRef.current || !enableZoom) return;
-
-    const rect = imgContainerRef.current.getBoundingClientRect();
-
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current || !enableZoom) return;
+    const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const xPercent = (x / rect.width) * 100;
-    const yPercent = (y / rect.height) * 100;
-
-    setZoomPos({ x, y });
-    setBackgroundPos({ x: xPercent, y: yPercent });
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!zoomVisible || !enableZoom) return;
-
-    e.preventDefault();
-
-    const delta = e.deltaY > 0 ? -zoomStep : zoomStep;
-
-    setCurrentZoom((prev) => {
-      const newZoom = prev + delta;
-      return Math.max(minZoom, Math.min(maxZoom, newZoom));
+    dispatch({ type: "SET_ZOOM_POS", payload: { x, y } });
+    dispatch({
+      type: "SET_BACKGROUND_POS",
+      payload: { x: (x / rect.width) * 100, y: (y / rect.height) * 100 },
     });
   };
 
-  const handleEnter = () => {
-    if (enableZoom) setZoomVisible(true);
-    onMouseEnter?.(undefined as any);
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    dispatch({ type: "SET_LOADED", payload: true });
+    dispatch({ type: "SET_ERROR", payload: false });
+    onLoad?.(e);
   };
 
-  const handleLeave = () => {
-    setZoomVisible(false);
-    setZoomLoaded(false);
-    setCurrentZoom(initialZoom);
-    onMouseLeave?.(undefined as any);
+  const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    dispatch({ type: "SET_LOADED", payload: false });
+    dispatch({ type: "SET_ERROR", payload: true });
+    onError?.(e);
   };
-
-  const handleLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    setLoaded(true);
-    onLoad?.(event);
-  };
-
-  const handleError = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    setError(true);
-    setLoaded(false);
-    onError?.(event);
-  };
-
-  if (!src || src.trim().length === 0) return null;
 
   return (
     <div
+      ref={containerRef}
       className={`image-container ${containerClass}`}
-      ref={imgContainerRef}
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      onMouseMove={enableZoom ? handleMouseMove : undefined}
-      onWheel={enableZoom ? handleWheel : undefined}
-      style={{
-        width,
-        height,
-        maxWidth,
-        maxHeight,
-        borderRadius,
+      onMouseEnter={(e) => {
+        if (enableZoom) dispatch({ type: "SET_ZOOM_VISIBLE", payload: true });
+        onMouseEnter?.(e as any);
       }}
+      onMouseLeave={(e) => {
+        dispatch({ type: "SET_ZOOM_VISIBLE", payload: false });
+        dispatch({ type: "SET_ZOOM_LOADED", payload: false });
+        dispatch({ type: "SET_CURRENT_ZOOM", payload: initialZoom });
+        onMouseLeave?.(e as any);
+      }}
+      onMouseMove={enableZoom ? handleMove : undefined}
+      style={{ width, height, maxWidth, maxHeight, borderRadius }}
     >
-      {(!loaded || error) && <div className={`skeleton ${skeletonClass}`} />}
+      {(!state.ready || !state.loaded || state.error) && (
+        <div className={`skeleton ${skeletonClass}`} />
+      )}
 
-      {!error && (
+      {state.ready && src && !state.error && (
         <img
           src={src}
           alt={alt}
           {...imgProps}
-          className={`image ${loaded ? "loaded" : "loading"} ${imageClass}`}
+          className={`image ${
+            state.loaded ? "loaded" : "loading"
+          } ${imageClass}`}
           onLoad={handleLoad}
           onError={handleError}
-          style={{
-            objectFit,
-            objectPosition,
-            borderRadius,
-          }}
+          style={{ objectFit, objectPosition, borderRadius }}
         />
       )}
 
-      {enableZoom && zoomVisible && loaded && !error && (
-        <>
-          {!zoomLoaded && (
-            <div
-              className="zoom-loading"
-              style={{
-                left: zoomPos.x - 16,
-                top: zoomPos.y - 16,
-              }}
-            />
-          )}
-
-          {zoomLoaded && (
-            <div
-              className="zoom-box"
-              style={{
-                width: zoomSize,
-                height: zoomSize,
-                left: zoomPos.x - zoomSize / 2,
-                top: zoomPos.y - zoomSize / 2,
-                backgroundImage: `url(${src})`,
-                backgroundPosition: `${backgroundPos.x}% ${backgroundPos.y}%`,
-                backgroundSize: `${currentZoom}%`,
-                borderRadius,
-              }}
-            />
-          )}
-        </>
-      )}
+      {enableZoom &&
+        state.zoomVisible &&
+        state.loaded &&
+        state.zoomLoaded &&
+        !state.error && (
+          <div
+            className="zoom-box"
+            style={{
+              width: zoomSize,
+              height: zoomSize,
+              left: state.zoomPos.x - zoomSize / 2,
+              top: state.zoomPos.y - zoomSize / 2,
+              backgroundImage: `url(${src})`,
+              backgroundPosition: `${state.backgroundPos.x}% ${state.backgroundPos.y}%`,
+              backgroundSize: `${state.currentZoom}%`,
+              borderRadius,
+              ...zoomBoxStyle,
+            }}
+          />
+        )}
     </div>
   );
-}
+};

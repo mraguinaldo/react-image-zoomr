@@ -19,4 +19,5 @@ export interface IImageZoomer extends ImgHTMLAttributes<HTMLImageElement> {
   minZoom?: number;
   maxZoom?: number;
   zoomSize?: number;
+  zoomBoxStyle?: React.CSSProperties;
 }
