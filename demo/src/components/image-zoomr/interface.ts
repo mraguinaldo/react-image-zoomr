@@ -1,9 +1,11 @@
-import type { ImgHTMLAttributes } from "react";
+import type { ImgHTMLAttributes, ReactNode } from "react";
 
 export interface IImageZoomer extends ImgHTMLAttributes<HTMLImageElement> {
   containerClass?: string;
   imageClass?: string;
   skeletonClass?: string;
+
+  elementForError?: ReactNode;
 
   width?: number | string;
   height?: number | string;

@@ -11,6 +11,8 @@ export const ImageZoomr = ({
   containerClass = "",
   imageClass = "",
   skeletonClass = "",
+  elementForError,
+
   enableZoom = true,
   initialZoom = 200,
   zoomStep = 25,
@@ -34,7 +36,7 @@ export const ImageZoomr = ({
   src,
   alt = "",
   zoomBoxStyle,
-  ...imgProps
+  ...IImg
 }: IImageZoomer) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -90,12 +92,17 @@ export const ImageZoomr = ({
 
   useEffect(() => {
     if (!enableZoom || !state.zoomVisible || !src) return;
+
     let cancelled = false;
     const img = new Image();
     img.src = src;
+
     img.onload = () => {
-      if (!cancelled) dispatch({ type: "SET_ZOOM_LOADED", payload: true });
+      if (!cancelled) {
+        dispatch({ type: "SET_ZOOM_LOADED", payload: true });
+      }
     };
+
     return () => {
       cancelled = true;
     };
@@ -103,6 +110,7 @@ export const ImageZoomr = ({
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !enableZoom) return;
+
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -110,7 +118,10 @@ export const ImageZoomr = ({
     dispatch({ type: "SET_ZOOM_POS", payload: { x, y } });
     dispatch({
       type: "SET_BACKGROUND_POS",
-      payload: { x: (x / rect.width) * 100, y: (y / rect.height) * 100 },
+      payload: {
+        x: (x / rect.width) * 100,
+        y: (y / rect.height) * 100,
+      },
     });
   };
 
@@ -131,7 +142,9 @@ export const ImageZoomr = ({
       ref={containerRef}
       className={`image-container ${containerClass}`}
       onMouseEnter={(e) => {
-        if (enableZoom) dispatch({ type: "SET_ZOOM_VISIBLE", payload: true });
+        if (enableZoom) {
+          dispatch({ type: "SET_ZOOM_VISIBLE", payload: true });
+        }
         onMouseEnter?.(e as any);
       }}
       onMouseLeave={(e) => {
@@ -143,15 +156,21 @@ export const ImageZoomr = ({
       onMouseMove={enableZoom ? handleMove : undefined}
       style={{ width, height, maxWidth, maxHeight, borderRadius }}
     >
-      {(!state.ready || !state.loaded || state.error) && (
+      {state.error ? (
+        elementForError ? (
+          elementForError
+        ) : (
+          <div className={`skeleton ${skeletonClass}`} />
+        )
+      ) : !state.ready || !state.loaded ? (
         <div className={`skeleton ${skeletonClass}`} />
-      )}
+      ) : null}
 
       {state.ready && src && !state.error && (
         <img
           src={src}
           alt={alt}
-          {...imgProps}
+          {...IImg}
           className={`image ${
             state.loaded ? "loaded" : "loading"
           } ${imageClass}`}
